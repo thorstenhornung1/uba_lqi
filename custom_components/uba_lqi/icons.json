@@ -1,0 +1,68 @@
+{
+  "entity": {
+    "sensor": {
+      "lqi": {
+        "default": "mdi:weather-hazy",
+        "state": {
+          "very_good": "mdi:emoticon-excited-outline",
+          "good": "mdi:emoticon-happy-outline",
+          "moderate": "mdi:emoticon-neutral-outline",
+          "poor": "mdi:emoticon-sad-outline",
+          "very_poor": "mdi:emoticon-dead-outline"
+        }
+      },
+      "combined_lqi": {
+        "default": "mdi:weather-hazy",
+        "state": {
+          "very_good": "mdi:emoticon-excited-outline",
+          "good": "mdi:emoticon-happy-outline",
+          "moderate": "mdi:emoticon-neutral-outline",
+          "poor": "mdi:emoticon-sad-outline",
+          "very_poor": "mdi:emoticon-dead-outline"
+        }
+      },
+      "lqi_numeric": {
+        "default": "mdi:numeric"
+      },
+      "combined_lqi_numeric": {
+        "default": "mdi:numeric"
+      },
+      "pm10": {
+        "default": "mdi:blur"
+      },
+      "pm25": {
+        "default": "mdi:blur"
+      },
+      "o3": {
+        "default": "mdi:weather-sunny-alert"
+      },
+      "no2": {
+        "default": "mdi:smog"
+      },
+      "so2": {
+        "default": "mdi:factory"
+      },
+      "co": {
+        "default": "mdi:molecule-co"
+      },
+      "benzene": {
+        "default": "mdi:hexagon-outline"
+      },
+      "lead": {
+        "default": "mdi:molecule"
+      },
+      "benzo_a_pyrene": {
+        "default": "mdi:molecule"
+      },
+      "arsenic": {
+        "default": "mdi:molecule"
+      },
+      "cadmium": {
+        "default": "mdi:molecule"
+      },
+      "nickel": {
+        "default": "mdi:molecule"
+      }
+    }
+  }
+}

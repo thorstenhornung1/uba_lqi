@@ -2,79 +2,143 @@
   "config": {
     "step": {
       "user": {
-        "title": "UBA Luftqualitätsindex (LQI) einrichten",
-        "description": "Wähle aus, wie die Umgebung für die Stationssuche bestimmt werden soll.",
+        "title": "Set up UBA air quality index",
+        "description": "Stations are searched around a location and their data is combined into one air quality index.",
         "data": {
-          "location_source": "Standortquelle",
-          "search_radius_km": "Suchradius",
-          "max_candidates": "Maximale Anzahl vorgeschlagener Stationen",
-          "scan_interval_minutes": "Aktualisierungsintervall"
+          "location_source": "Location source",
+          "radius_km": "Search radius"
+        },
+        "data_description": {
+          "location_source": "Use the Home Assistant home location or pick coordinates on a map.",
+          "radius_km": "Only stations within this radius are offered. Ozone is a regional pollutant; a second station up to about 25 km away is a reasonable supplement if the nearest station does not measure ozone."
         }
       },
       "manual_location": {
-        "title": "Manuelle Position",
-        "description": "Gib die Koordinaten ein, um Luftmessstationen in der Nähe zu suchen.",
+        "title": "Pick a location",
         "data": {
-          "latitude": "Breitengrad",
-          "longitude": "Längengrad"
+          "location": "Location"
         }
       },
       "select_stations": {
-        "title": "Stationen auswählen",
-        "description": "Es wurden {candidate_count} Stationen in der Nähe von {latitude}, {longitude} gefunden bzw. vorgeschlagen. Suchradius: {radius} km.",
+        "title": "Select stations",
+        "description": "{count} active stations found within {radius} km, sorted by distance. Select the nearest station; add a second station if it fills a gap (for example ozone).",
         "data": {
-          "selected_stations": "Stationen"
+          "stations": "Measuring stations"
         }
       }
     },
     "error": {
-      "cannot_connect": "Die API konnte nicht erreicht werden.",
-      "home_location_missing": "In Home Assistant ist kein Standort hinterlegt.",
-      "invalid_coordinates": "Ungültige Koordinaten. Bitte Breiten- und Längengrad prüfen.",
-      "no_station_selected": "Bitte wähle mindestens eine Station aus."
+      "cannot_connect": "The Umweltbundesamt API could not be reached.",
+      "no_stations_found": "No active station within the radius. Increase the search radius.",
+      "no_station_selected": "Select at least one station.",
+      "station_already_configured": "At least one selected station is already part of another entry."
+    },
+    "abort": {
+      "reconfigure_successful": "Configuration updated."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "UBA Luftqualitätsindex (LQI) konfigurieren",
-        "description": "Passe Standort, Suchradius und Aktualisierungsintervall an.",
+        "title": "Polling settings",
         "data": {
-          "location_source": "Standortquelle",
-          "search_radius_km": "Suchradius",
-          "max_candidates": "Maximale Anzahl vorgeschlagener Stationen",
-          "scan_interval_minutes": "Aktualisierungsintervall"
-        }
-      },
-      "manual_location": {
-        "title": "Manuelle Position",
-        "description": "Gib die Koordinaten ein, um Luftmessstationen in der Nähe zu suchen.",
-        "data": {
-          "latitude": "Breitengrad",
-          "longitude": "Längengrad"
-        }
-      },
-      "select_stations": {
-        "title": "Stationen auswählen",
-        "description": "Es wurden {candidate_count} Stationen in der Nähe von {latitude}, {longitude} gefunden bzw. vorgeschlagen. Suchradius: {radius} km.",
-        "data": {
-          "selected_stations": "Stationen"
+          "update_interval_minutes": "Update interval"
+        },
+        "data_description": {
+          "update_interval_minutes": "The Umweltbundesamt publishes new values once per hour, typically 50 minutes past the hour."
         }
       }
-    },
-    "error": {
-      "cannot_connect": "Die API konnte nicht erreicht werden.",
-      "home_location_missing": "In Home Assistant ist kein Standort hinterlegt.",
-      "invalid_coordinates": "Ungültige Koordinaten. Bitte Breiten- und Längengrad prüfen.",
-      "no_station_selected": "Bitte wähle mindestens eine Station aus."
     }
   },
   "selector": {
     "location_source": {
       "options": {
-        "home": "Home-Assistant-Standort",
-        "manual": "Manuelle Koordinaten"
+        "home": "Home Assistant home location",
+        "manual": "Pick on map"
       }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "lqi": {
+        "name": "Air quality index",
+        "state": {
+          "very_good": "Very good",
+          "good": "Good",
+          "moderate": "Moderate",
+          "poor": "Poor",
+          "very_poor": "Very poor"
+        }
+      },
+      "lqi_numeric": {
+        "name": "Air quality index (numeric)"
+      },
+      "last_measurement": {
+        "name": "Last measurement"
+      },
+      "distance": {
+        "name": "Distance"
+      },
+      "combined_lqi": {
+        "name": "Air quality index",
+        "state": {
+          "very_good": "Very good",
+          "good": "Good",
+          "moderate": "Moderate",
+          "poor": "Poor",
+          "very_poor": "Very poor"
+        }
+      },
+      "combined_lqi_numeric": {
+        "name": "Air quality index (numeric)"
+      },
+      "pm10": {
+        "name": "Particulate matter PM10"
+      },
+      "pm25": {
+        "name": "Particulate matter PM2.5"
+      },
+      "o3": {
+        "name": "Ozone"
+      },
+      "no2": {
+        "name": "Nitrogen dioxide"
+      },
+      "so2": {
+        "name": "Sulphur dioxide"
+      },
+      "co": {
+        "name": "Carbon monoxide"
+      },
+      "benzene": {
+        "name": "Benzene"
+      },
+      "lead": {
+        "name": "Lead in PM10"
+      },
+      "benzo_a_pyrene": {
+        "name": "Benzo(a)pyrene in PM10"
+      },
+      "arsenic": {
+        "name": "Arsenic in PM10"
+      },
+      "cadmium": {
+        "name": "Cadmium in PM10"
+      },
+      "nickel": {
+        "name": "Nickel in PM10"
+      }
+    }
+  },
+  "exceptions": {
+    "update_failed": {
+      "message": "Fetching data from the Umweltbundesamt API failed: {error}"
+    }
+  },
+  "issues": {
+    "station_silent": {
+      "title": "Station {station} is not delivering data",
+      "description": "The measuring station {station} has not delivered any data since {last}. Its sensors are shown as unavailable. If the station stays silent, replace it via the reconfigure option of the integration entry."
     }
   }
 }

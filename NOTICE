@@ -1,0 +1,15 @@
+UBA Luftqualitätsindex (LQI) - Home Assistant Integration
+Copyright 2026 Thorsten Hornung
+
+Dieses Projekt ist ein Fork von "uba_lqi" von Q14siX
+(https://github.com/Q14siX/uba_lqi), lizenziert unter der Apache License 2.0.
+
+Version 2.0.0 ist eine weitgehende Neuimplementierung: Umstellung auf die
+Air-Data-API v4 des Umweltbundesamts, korrekte Zeitzonen-Behandlung (feste
+MEZ), Frische-Prüfung der Messwerte, kombinierter Index über mehrere
+Stationen, Übersetzungen, Diagnose, Repair Issues und Tests. Konzept und
+Einrichtungsablauf (Standort -> Radius -> Stationswahl) folgen dem Original.
+
+Datenquelle: Umweltbundesamt, Luftdaten-API
+(https://luftdaten.umweltbundesamt.de). Die Nutzung der Daten unterliegt den
+Bedingungen des Umweltbundesamts.

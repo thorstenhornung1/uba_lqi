@@ -2,79 +2,143 @@
   "config": {
     "step": {
       "user": {
-        "title": "UBA Luftqualitätsindex (LQI) einrichten",
-        "description": "Wähle aus, wie die Umgebung für die Stationssuche bestimmt werden soll.",
+        "title": "UBA Luftqualitätsindex einrichten",
+        "description": "Um einen Standort herum werden Stationen gesucht und ihre Daten zu einem Luftqualitätsindex kombiniert.",
         "data": {
           "location_source": "Standortquelle",
-          "search_radius_km": "Suchradius",
-          "max_candidates": "Maximale Anzahl vorgeschlagener Stationen",
-          "scan_interval_minutes": "Aktualisierungsintervall"
+          "radius_km": "Suchradius"
+        },
+        "data_description": {
+          "location_source": "Home-Assistant-Standort verwenden oder Koordinaten auf einer Karte wählen.",
+          "radius_km": "Nur Stationen innerhalb dieses Radius werden angeboten. Ozon ist ein flächiger Schadstoff; eine zweite Station bis etwa 25 km Entfernung ist eine sinnvolle Ergänzung, wenn die nächstgelegene Station kein Ozon misst."
         }
       },
       "manual_location": {
-        "title": "Manuelle Position",
-        "description": "Gib die Koordinaten ein, um Luftmessstationen in der Nähe zu suchen.",
+        "title": "Standort wählen",
         "data": {
-          "latitude": "Breitengrad",
-          "longitude": "Längengrad"
+          "location": "Standort"
         }
       },
       "select_stations": {
         "title": "Stationen auswählen",
-        "description": "Es wurden {candidate_count} Stationen in der Nähe von {latitude}, {longitude} gefunden bzw. vorgeschlagen. Suchradius: {radius} km.",
+        "description": "{count} aktive Stationen im Umkreis von {radius} km gefunden, nach Entfernung sortiert. Wähle die nächstgelegene Station; ergänze eine zweite, wenn sie eine Lücke schließt (z. B. Ozon).",
         "data": {
-          "selected_stations": "Stationen"
+          "stations": "Messstationen"
         }
       }
     },
     "error": {
-      "cannot_connect": "Die API konnte nicht erreicht werden.",
-      "home_location_missing": "In Home Assistant ist kein Standort hinterlegt.",
-      "invalid_coordinates": "Ungültige Koordinaten. Bitte Breiten- und Längengrad prüfen.",
-      "no_station_selected": "Bitte wähle mindestens eine Station aus."
+      "cannot_connect": "Die API des Umweltbundesamts ist nicht erreichbar.",
+      "no_stations_found": "Keine aktive Station im Umkreis. Vergrößere den Suchradius.",
+      "no_station_selected": "Wähle mindestens eine Station aus.",
+      "station_already_configured": "Mindestens eine gewählte Station gehört bereits zu einem anderen Eintrag."
+    },
+    "abort": {
+      "reconfigure_successful": "Konfiguration aktualisiert."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "UBA Luftqualitätsindex (LQI) konfigurieren",
-        "description": "Passe Standort, Suchradius und Aktualisierungsintervall an.",
+        "title": "Abrufeinstellungen",
         "data": {
-          "location_source": "Standortquelle",
-          "search_radius_km": "Suchradius",
-          "max_candidates": "Maximale Anzahl vorgeschlagener Stationen",
-          "scan_interval_minutes": "Aktualisierungsintervall"
-        }
-      },
-      "manual_location": {
-        "title": "Manuelle Position",
-        "description": "Gib die Koordinaten ein, um Luftmessstationen in der Nähe zu suchen.",
-        "data": {
-          "latitude": "Breitengrad",
-          "longitude": "Längengrad"
-        }
-      },
-      "select_stations": {
-        "title": "Stationen auswählen",
-        "description": "Es wurden {candidate_count} Stationen in der Nähe von {latitude}, {longitude} gefunden bzw. vorgeschlagen. Suchradius: {radius} km.",
-        "data": {
-          "selected_stations": "Stationen"
+          "update_interval_minutes": "Aktualisierungsintervall"
+        },
+        "data_description": {
+          "update_interval_minutes": "Das Umweltbundesamt veröffentlicht stündlich neue Werte, typischerweise 50 Minuten nach der vollen Stunde."
         }
       }
-    },
-    "error": {
-      "cannot_connect": "Die API konnte nicht erreicht werden.",
-      "home_location_missing": "In Home Assistant ist kein Standort hinterlegt.",
-      "invalid_coordinates": "Ungültige Koordinaten. Bitte Breiten- und Längengrad prüfen.",
-      "no_station_selected": "Bitte wähle mindestens eine Station aus."
     }
   },
   "selector": {
     "location_source": {
       "options": {
         "home": "Home-Assistant-Standort",
-        "manual": "Manuelle Koordinaten"
+        "manual": "Auf Karte wählen"
       }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "lqi": {
+        "name": "Luftqualitätsindex",
+        "state": {
+          "very_good": "Sehr gut",
+          "good": "Gut",
+          "moderate": "Mäßig",
+          "poor": "Schlecht",
+          "very_poor": "Sehr schlecht"
+        }
+      },
+      "lqi_numeric": {
+        "name": "Luftqualitätsindex (numerisch)"
+      },
+      "last_measurement": {
+        "name": "Letzte Messung"
+      },
+      "distance": {
+        "name": "Entfernung"
+      },
+      "combined_lqi": {
+        "name": "Luftqualitätsindex",
+        "state": {
+          "very_good": "Sehr gut",
+          "good": "Gut",
+          "moderate": "Mäßig",
+          "poor": "Schlecht",
+          "very_poor": "Sehr schlecht"
+        }
+      },
+      "combined_lqi_numeric": {
+        "name": "Luftqualitätsindex (numerisch)"
+      },
+      "pm10": {
+        "name": "Feinstaub PM10"
+      },
+      "pm25": {
+        "name": "Feinstaub PM2,5"
+      },
+      "o3": {
+        "name": "Ozon"
+      },
+      "no2": {
+        "name": "Stickstoffdioxid"
+      },
+      "so2": {
+        "name": "Schwefeldioxid"
+      },
+      "co": {
+        "name": "Kohlenmonoxid"
+      },
+      "benzene": {
+        "name": "Benzol"
+      },
+      "lead": {
+        "name": "Blei im Feinstaub"
+      },
+      "benzo_a_pyrene": {
+        "name": "Benzo(a)pyren im Feinstaub"
+      },
+      "arsenic": {
+        "name": "Arsen im Feinstaub"
+      },
+      "cadmium": {
+        "name": "Cadmium im Feinstaub"
+      },
+      "nickel": {
+        "name": "Nickel im Feinstaub"
+      }
+    }
+  },
+  "exceptions": {
+    "update_failed": {
+      "message": "Der Abruf von Daten der Umweltbundesamt-API ist fehlgeschlagen: {error}"
+    }
+  },
+  "issues": {
+    "station_silent": {
+      "title": "Station {station} liefert keine Daten",
+      "description": "Die Messstation {station} hat seit {last} keine Daten geliefert. Ihre Sensoren werden als nicht verfügbar angezeigt. Bleibt die Station stumm, ersetze sie über die Option „Neu konfigurieren“ des Integrationseintrags."
     }
   }
 }

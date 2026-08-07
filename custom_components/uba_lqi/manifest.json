@@ -1,13 +1,12 @@
 {
   "domain": "uba_lqi",
   "name": "UBA Luftqualitätsindex (LQI)",
-  "codeowners": [
-    "@Q14siX"
-  ],
+  "codeowners": ["@thorstenhornung1"],
   "config_flow": true,
-  "documentation": "https://github.com/Q14siX/uba_lqi/",
+  "documentation": "https://github.com/thorstenhornung1/uba_lqi",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/thorstenhornung1/uba_lqi/issues",
   "requirements": [],
-  "version": "20260329.1300"
+  "version": "2.0.0"
 }
