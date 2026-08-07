@@ -73,6 +73,15 @@ async def test_airquality_parsing(hass, aioclient_mock, frozen_now) -> None:
     assert air.components[5].value == 15
     assert air.components[5].end == datetime(2026, 8, 7, 5, 0, tzinfo=UTC)
 
+    # Das Abfragefenster wird in MEZ gerechnet: 06:30 UTC = 07:30 MEZ,
+    # 24 h zurück -> 06.08. als date_from.
+    query = aioclient_mock.mock_calls[-1][1].query
+    assert query["station"] == "1117"
+    assert query["date_from"] == "2026-08-06"
+    assert query["date_to"] == "2026-08-07"
+    assert query["time_from"] == "1"
+    assert query["time_to"] == "24"
+
 
 async def test_airquality_invalid_index(hass, aioclient_mock, frozen_now) -> None:
     """-1 und unsinnige Indexwerte werden zu None."""
@@ -150,11 +159,79 @@ async def test_station_meta_parsing(hass, aioclient_mock, frozen_now) -> None:
     assert station.station_type == "Hintergrund"
 
 
+async def test_malformed_rows_are_skipped(hass, aioclient_mock, frozen_now) -> None:
+    """Kaputte Zeilen/Komponenten aus der API stören das Parsen nicht."""
+    payload = {
+        "data": {
+            "1117": {
+                "kein-datum": ["2026-08-07 07:00:00", 1, 0],
+                "2026-08-07 05:00:00": "keine-liste",
+                "2026-08-07 06:00:00": [
+                    None,  # fehlendes Ende -> Start + 1 h
+                    "x",  # unlesbarer Gesamtindex -> None
+                    "y",  # unlesbares incomplete -> None
+                    "keine-liste",
+                    [None, 1, 1],  # Komponente ohne ID
+                    [1, 8, 0, "0.9"],
+                    [1, 7, 0, "0.8"],  # gleiche Komponente, nicht neuer
+                ],
+            }
+        }
+    }
+    aioclient_mock.get(AIRQUALITY_URL, json=payload)
+    client = UbaLqiApiClient(async_get_clientsession(hass))
+    air = await client.async_get_air_quality("1117", hours_back=24)
+
+    assert set(air.components) == {1}
+    assert air.components[1].value == 8
+    assert air.total_index is None
+    assert air.all_components_reported is None
+    # Fallback-Ende: Start 06:00 MEZ + 1 h = 06:00 UTC.
+    assert air.components[1].end == datetime(2026, 8, 7, 6, 0, tzinfo=UTC)
+
+
+async def test_station_list_unparseable(hass, aioclient_mock, frozen_now) -> None:
+    """Nur unbrauchbare Stations-Einträge -> Fehler statt leerer Liste."""
+    aioclient_mock.get(
+        META_URL,
+        json={
+            "stations": {
+                "1": ["1", "C"],
+                "2": ["2", "C", None, "Ort", "", None, None, "7.0", "50.0"],
+            }
+        },
+    )
+    client = UbaLqiApiClient(async_get_clientsession(hass))
+    with pytest.raises(UbaLqiResponseError):
+        await client.async_get_stations()
+
+
 async def test_http_error(hass, aioclient_mock, frozen_now) -> None:
     aioclient_mock.get(AIRQUALITY_URL, status=503)
     client = UbaLqiApiClient(async_get_clientsession(hass))
     with pytest.raises(UbaLqiConnectionError):
         await client.async_get_air_quality("1117", hours_back=24)
+
+
+async def test_timeout(hass, aioclient_mock, frozen_now) -> None:
+    aioclient_mock.get(AIRQUALITY_URL, exc=TimeoutError())
+    client = UbaLqiApiClient(async_get_clientsession(hass))
+    with pytest.raises(UbaLqiConnectionError):
+        await client.async_get_air_quality("1117", hours_back=24)
+
+
+async def test_invalid_json(hass, aioclient_mock, frozen_now) -> None:
+    aioclient_mock.get(META_URL, text="kein json")
+    client = UbaLqiApiClient(async_get_clientsession(hass))
+    with pytest.raises(UbaLqiResponseError):
+        await client.async_get_stations()
+
+
+async def test_missing_station_list(hass, aioclient_mock, frozen_now) -> None:
+    aioclient_mock.get(META_URL, json={"stations": None})
+    client = UbaLqiApiClient(async_get_clientsession(hass))
+    with pytest.raises(UbaLqiResponseError):
+        await client.async_get_stations()
 
 
 async def test_unexpected_payload(hass, aioclient_mock, frozen_now) -> None:

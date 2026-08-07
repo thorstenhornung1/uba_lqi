@@ -14,7 +14,7 @@ from homeassistant.helpers import issue_registry as ir
 from custom_components.uba_lqi.api import UbaLqiConnectionError
 from custom_components.uba_lqi.const import DOMAIN
 
-from .conftest import air, bonn_air, component, koeln_air
+from .conftest import FRESH_END, air, bonn_air, component, koeln_air
 
 
 async def _setup(hass, config_entry):
@@ -63,12 +63,29 @@ async def test_partial_failure_keeps_other_station(
     }
     await coordinator.async_refresh()
     assert coordinator.last_update_success is True
-    assert coordinator.data.stations["1117"].air is None
-    assert coordinator.data.stations["1117"].lqi is None
+    # Transienter Fehler: letzter bekannter Stand von 1117 bleibt erhalten,
+    # die Frische-Grenze altert ihn von selbst aus.
+    assert coordinator.data.stations["1117"].air is not None
+    assert coordinator.data.stations["1117"].lqi == 1
+    assert coordinator.data.stations["1117"].last_measurement == FRESH_END
     assert coordinator.data.stations["1114"].lqi == 2
     assert coordinator.data.aggregate.lqi == 2
     # Backoff greift bei Teilerfolg nicht.
     assert coordinator.update_interval == timedelta(minutes=60)
+
+
+async def test_partial_failure_without_history_is_unavailable(
+    hass: HomeAssistant, fake_api, config_entry, frozen_now
+) -> None:
+    """Fehler ohne früheren Erfolg: Station bleibt ohne Daten."""
+    fake_api.air = {
+        "1117": UbaLqiConnectionError("down"),
+        "1114": koeln_air(),
+    }
+    coordinator = await _setup(hass, config_entry)
+    assert coordinator.data.stations["1117"].air is None
+    assert coordinator.data.stations["1117"].lqi is None
+    assert coordinator.data.stations["1114"].lqi == 2
 
 
 async def test_repair_issue_for_silent_station(

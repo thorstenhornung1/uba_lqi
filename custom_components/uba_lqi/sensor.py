@@ -188,8 +188,11 @@ def expected_unique_ids(entry: UbaLqiConfigEntry) -> set[str]:
         unique_ids.update(
             f"{station_id}_{description.key}" for description in STATION_SENSORS
         )
-        for component_id in config.get("components") or []:
-            unique_ids.add(f"{station_id}_component_{component_id}")
+        unique_ids.update(
+            f"{station_id}_component_{component_id}"
+            for component_id in config.get("components") or []
+            if component_id in COMPONENT_DESCRIPTIONS
+        )
     unique_ids.update(
         f"{entry.entry_id}_{description.key}" for description in COMBINED_SENSORS
     )

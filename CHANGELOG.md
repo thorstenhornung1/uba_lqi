@@ -4,10 +4,14 @@
 
 ## 2.0.0 (2026-08-07)
 
-Neuimplementierung als neue Major-Version. **Breaking Change:** Die Sensoren
-werden neu angelegt (neue Entitäts-IDs und Zustände); bestehende Einträge
-werden automatisch migriert, Automationen müssen auf die neuen Entitäten
-umgestellt werden.
+Neuimplementierung als neue Major-Version. **Breaking Change:** Bestehende
+Einträge werden automatisch migriert. Der LQI-Sensor, „Messende" (jetzt
+„Letzte Messung"), die Schadstoff- und die Entfernungs-Sensoren behalten
+dabei ihre Entitäts-IDs und ihre Historie; die Zustandswerte des LQI-Sensors
+ändern sich jedoch (übersetzbare Kennungen wie `very_good` statt deutscher
+Texte), und die Sensoren „Messbeginn" sowie „Datenvollständigkeit" entfallen
+ersatzlos. Automationen, die auf Zustandstexte prüfen, müssen angepasst
+werden.
 
 ### Behoben
 

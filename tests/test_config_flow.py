@@ -6,6 +6,8 @@ https://github.com/tonylofgren/aurora-smart-home
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -129,6 +131,46 @@ async def test_station_overlap_rejected(
     assert result["errors"] == {"stations": "station_already_configured"}
 
 
+async def test_empty_selection_rejected(hass: HomeAssistant, fake_api) -> None:
+    """Leere Auswahl -> Fehler, Formular bleibt offen."""
+    result = await _start_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"location_source": "manual", "radius_km": 50},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"location": {"latitude": HOME_LAT, "longitude": HOME_LON}},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"stations": []}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"stations": "no_station_selected"}
+
+
+async def test_cannot_connect_during_finish(hass: HomeAssistant, fake_api) -> None:
+    """API-Ausfall bei der Komponenten-Ermittlung -> Fehler statt Absturz."""
+    result = await _start_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"location_source": "manual", "radius_km": 50},
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"location": {"latitude": HOME_LAT, "longitude": HOME_LON}},
+    )
+    fake_api.air["1117"] = UbaLqiConnectionError("down")
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"stations": ["1117", "1114"]}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}
+    # Die Auswahl des Nutzers bleibt nach dem Fehler erhalten.
+    defaults = result["data_schema"]({})
+    assert set(defaults["stations"]) == {"1117", "1114"}
+
+
 async def test_reconfigure(hass: HomeAssistant, fake_api, config_entry) -> None:
     """Reconfigure ersetzt die Stationsauswahl im bestehenden Eintrag."""
     result = await config_entry.start_reconfigure_flow(hass)
@@ -165,3 +207,7 @@ async def test_options_flow(hass: HomeAssistant, fake_api, config_entry) -> None
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert config_entry.options == {"update_interval_minutes": 30}
+
+    # Nach dem Reload läuft der Coordinator tatsächlich mit dem neuen Intervall.
+    await hass.async_block_till_done()
+    assert config_entry.runtime_data.update_interval == timedelta(minutes=30)

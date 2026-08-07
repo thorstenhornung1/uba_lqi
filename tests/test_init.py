@@ -8,7 +8,11 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.uba_lqi.api import UbaLqiConnectionError
@@ -96,6 +100,91 @@ async def test_migration_from_v1(hass: HomeAssistant, fake_api) -> None:
     assert "component_details" not in entry.data
 
 
+async def test_migration_preserves_renamed_entities(
+    hass: HomeAssistant, fake_api
+) -> None:
+    """v1-unique_ids werden umgeschrieben — Entity-IDs und Historie bleiben."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=1,
+        data={
+            "latitude": HOME_LAT,
+            "longitude": HOME_LON,
+            "selected_stations": ["1117"],
+            "station_details": {"1117": {"name": "Bonn-Auerberg"}},
+        },
+    )
+    entry.add_to_hass(hass)
+    entity_registry = er.async_get(hass)
+    old_lqi = entity_registry.async_get_or_create(
+        "sensor", DOMAIN, "1117_lqi_label", config_entry=entry
+    )
+    entity_registry.async_get_or_create(
+        "sensor", DOMAIN, "1117_measurement_end", config_entry=entry
+    )
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.version == 2
+    assert entry.minor_version == 1
+    # Umbenannte Sensoren behalten ihre entity_id unter neuer unique_id.
+    assert (
+        entity_registry.async_get_entity_id("sensor", DOMAIN, "1117_lqi")
+        == old_lqi.entity_id
+    )
+    assert entity_registry.async_get_entity_id(
+        "sensor", DOMAIN, "1117_last_measurement"
+    )
+    assert (
+        entity_registry.async_get_entity_id("sensor", DOMAIN, "1117_lqi_label")
+        is None
+    )
+
+
+async def test_migration_guards(hass: HomeAssistant, fake_api) -> None:
+    """Downgrade und leere v1-Einträge werden abgewiesen."""
+    future = MockConfigEntry(domain=DOMAIN, version=3, data={})
+    future.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(future.entry_id)
+    await hass.async_block_till_done()
+    assert future.state is ConfigEntryState.MIGRATION_ERROR
+
+    empty = MockConfigEntry(
+        domain=DOMAIN, version=1, data={"selected_stations": []}
+    )
+    empty.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(empty.entry_id)
+    await hass.async_block_till_done()
+    assert empty.state is ConfigEntryState.MIGRATION_ERROR
+
+
+async def test_migrated_entry_retries_when_api_down(
+    hass: HomeAssistant, fake_api
+) -> None:
+    """Migration + UBA nicht erreichbar -> SETUP_RETRY, kein Absturz."""
+    fake_api.air = {
+        "1117": UbaLqiConnectionError("down"),
+        "1114": UbaLqiConnectionError("down"),
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=1,
+        data={
+            "latitude": HOME_LAT,
+            "longitude": HOME_LON,
+            "selected_stations": ["1117"],
+            "station_details": {"1117": {"name": "Bonn-Auerberg"}},
+        },
+    )
+    entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    # Die Migration selbst ist gelaufen; nur die Discovery wartet auf die API.
+    assert entry.version == 2
+
+
 async def test_stale_registry_cleanup(
     hass: HomeAssistant, fake_api, config_entry
 ) -> None:
@@ -110,8 +199,17 @@ async def test_stale_registry_cleanup(
     entity_registry.async_get_or_create(
         "sensor",
         DOMAIN,
-        "1117_lqi_label",  # Schema der Version 1
+        "1117_data_completeness",  # v1-Sensor ohne v2-Pendant
         config_entry=config_entry,
+    )
+    # Verwaistes Repair Issue einer nirgends mehr konfigurierten Station.
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        "station_silent_999",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="station_silent",
     )
 
     assert await hass.config_entries.async_setup(config_entry.entry_id)
@@ -119,7 +217,14 @@ async def test_stale_registry_cleanup(
 
     assert device_registry.async_get(stale_device.id) is None
     assert (
-        entity_registry.async_get_entity_id("sensor", DOMAIN, "1117_lqi_label") is None
+        entity_registry.async_get_entity_id(
+            "sensor", DOMAIN, "1117_data_completeness"
+        )
+        is None
     )
     # Die neuen Entitäten existieren.
     assert entity_registry.async_get_entity_id("sensor", DOMAIN, "1117_lqi")
+    # Das Issue der entfernten Station ist weg.
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, "station_silent_999") is None
+    )

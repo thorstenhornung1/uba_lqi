@@ -11,9 +11,13 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import UbaLqiApiClient, UbaLqiError
@@ -26,6 +30,7 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL_MINUTES,
     DISCOVERY_WINDOW_HOURS,
     DOMAIN,
+    ISSUE_STATION_SILENT,
     LOCATION_SOURCE_HOME,
     MIN_UPDATE_INTERVAL_MINUTES,
 )
@@ -138,12 +143,48 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         options = {
             CONF_UPDATE_INTERVAL: max(interval, MIN_UPDATE_INTERVAL_MINUTES),
         }
+        await _async_migrate_v1_unique_ids(hass, entry)
         hass.config_entries.async_update_entry(
-            entry, data=data, options=options, version=2
+            entry, data=data, options=options, version=2, minor_version=1
         )
         _LOGGER.info("Migrated config entry %s to version 2", entry.title)
+    elif entry.minor_version != 1:
+        # Ohne Angleich der Minor-Version liefe die Migration bei jedem Start.
+        hass.config_entries.async_update_entry(entry, minor_version=1)
 
     return True
+
+
+# Umbenannte Sensoren der Version 1: Entity-IDs, Anpassungen und Historie
+# bleiben erhalten. Nicht gelistete v1-Sensoren (measurement_start,
+# data_completeness) entfallen ersatzlos und werden beim Setup bereinigt.
+_V1_UNIQUE_ID_RENAMES = {
+    "lqi_label": "lqi",
+    "measurement_end": "last_measurement",
+}
+
+
+async def _async_migrate_v1_unique_ids(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    entity_registry = er.async_get(hass)
+
+    @callback
+    def _migrate(entity_entry: er.RegistryEntry) -> dict[str, str] | None:
+        for old_suffix, new_suffix in _V1_UNIQUE_ID_RENAMES.items():
+            if not entity_entry.unique_id.endswith(f"_{old_suffix}"):
+                continue
+            new_unique_id = (
+                entity_entry.unique_id.removesuffix(old_suffix) + new_suffix
+            )
+            if entity_registry.async_get_entity_id(
+                "sensor", DOMAIN, new_unique_id
+            ):
+                return None  # Ziel existiert bereits; das Alte wird bereinigt.
+            return {"new_unique_id": new_unique_id}
+        return None
+
+    await er.async_migrate_entries(hass, entry.entry_id, _migrate)
 
 
 async def _async_ensure_station_components(
@@ -154,6 +195,11 @@ async def _async_ensure_station_components(
     Entitäten entstehen aus diesen gespeicherten Metadaten - nicht aus der
     ersten API-Antwort, damit keine Entität fehlt, wenn eine Komponente
     gerade "hinkt".
+
+    Bewusst: Eine Station, die im Discovery-Fenster nichts lieferte
+    (``components: []``), wird bei jedem weiteren Setup erneut befragt, damit
+    ihre Entitäten entstehen, sobald sie wieder meldet. Kostet einen
+    API-Aufruf je Start und stummer Station.
     """
     stations: dict[str, dict[str, Any]] = entry.data[CONF_STATIONS]
     if all(config.get("components") for config in stations.values()):
@@ -208,3 +254,18 @@ def _async_remove_stale_registry_entries(
     for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
         if entity.unique_id not in expected:
             entity_registry.async_remove(entity.entity_id)
+
+    # Repair Issues von Stationen löschen, die (über alle Einträge hinweg)
+    # nicht mehr konfiguriert sind - z. B. nach einem Reconfigure.
+    configured: set[str] = set()
+    for other in hass.config_entries.async_entries(DOMAIN):
+        configured.update(other.data.get(CONF_STATIONS, {}))
+    issue_registry = ir.async_get(hass)
+    prefix = f"{ISSUE_STATION_SILENT}_"
+    for domain, issue_id in list(issue_registry.issues):
+        if (
+            domain == DOMAIN
+            and issue_id.startswith(prefix)
+            and issue_id.removeprefix(prefix) not in configured
+        ):
+            ir.async_delete_issue(hass, DOMAIN, issue_id)

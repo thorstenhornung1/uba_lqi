@@ -6,9 +6,13 @@ https://github.com/tonylofgren/aurora-smart-home
 
 from __future__ import annotations
 
-from homeassistant.const import CONCENTRATION_MICROGRAMS_PER_CUBIC_METER
+from homeassistant.const import (
+    CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+    CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.uba_lqi.const import DOMAIN
 
@@ -118,3 +122,70 @@ async def test_component_units_and_device_classes(
     o3 = _state(hass, "1114_component_3")
     assert o3.attributes["device_class"] == "ozone"
     assert o3.attributes["state_class"] == "measurement"
+
+
+async def test_numeric_sensors_when_enabled(
+    hass: HomeAssistant, fake_api, config_entry, frozen_now
+) -> None:
+    """Die per Default deaktivierten numerischen Sensoren liefern 0-4."""
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "sensor", DOMAIN, "1117_lqi_numeric", config_entry=config_entry
+    )
+    registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "test_entry_combined_lqi_numeric",
+        config_entry=config_entry,
+    )
+    await _setup(hass, config_entry)
+
+    assert _state(hass, "1117_lqi_numeric").state == "1"
+    assert _state(hass, "test_entry_combined_lqi_numeric").state == "2"
+
+
+async def test_co_sensor_uses_native_unit(
+    hass: HomeAssistant, fake_api, frozen_now
+) -> None:
+    """CO: Geräteklasse mit mg/m³ (nativ erlaubt), kein Index."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="CO-Station",
+        version=2,
+        entry_id="co_entry",
+        data={
+            "location_source": "home",
+            "latitude": 50.73,
+            "longitude": 7.09,
+            "radius_km": 50,
+            "stations": {
+                "9999": {
+                    "code": "DETEST1",
+                    "name": "Teststation",
+                    "city": "Testtown",
+                    "latitude": 50.7,
+                    "longitude": 7.0,
+                    "setting": None,
+                    "station_type": None,
+                    "distance_km": 5.0,
+                    "components": [1, 2],
+                }
+            },
+        },
+    )
+    entry.add_to_hass(hass)
+    fake_api.air["9999"] = air(
+        "9999", [component(1, 12.0, 1), component(2, 0.3, None)]
+    )
+    await _setup(hass, entry)
+
+    co = _state(hass, "9999_component_2")
+    assert co.state == "0.3"
+    assert co.attributes["device_class"] == "carbon_monoxide"
+    assert (
+        co.attributes["unit_of_measurement"]
+        == CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER
+    )
+    # CO ist keine Indexkomponente - kein Level, aber verfügbar.
+    assert co.attributes["index"] is None
+    assert co.attributes["level"] is None

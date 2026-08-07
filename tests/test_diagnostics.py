@@ -22,6 +22,15 @@ async def test_diagnostics_redacts_home_location(
     # Heimkoordinaten werden geschwärzt.
     assert diagnostics["entry"]["data"]["latitude"] == "**REDACTED**"
     assert diagnostics["entry"]["data"]["longitude"] == "**REDACTED**"
+    stations = diagnostics["entry"]["data"]["stations"]
+    # distance_km erlaubt sonst Trilateration des Wohnorts über die
+    # öffentlichen Stationskoordinaten; die Reihenfolge (nächste zuerst)
+    # verriete Relativabstände - daher geschwärzt bzw. nach ID sortiert.
+    for station in stations.values():
+        assert station["distance_km"] == "**REDACTED**"
+        assert station["latitude"] == "**REDACTED**"
+        assert station["longitude"] == "**REDACTED**"
+    assert list(stations) == ["1114", "1117"]
 
     assert diagnostics["update"]["last_update_success"] is True
     assert diagnostics["stations"]["1117"]["lqi"] == 1

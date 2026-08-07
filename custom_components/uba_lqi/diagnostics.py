@@ -12,11 +12,14 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import UbaLqiConfigEntry
+from .const import CONF_STATIONS
 from .coordinator import StationState
 
-# Die Heimkoordinaten des Nutzers werden geschwärzt; Stationskoordinaten
-# sind öffentliche Infrastrukturdaten und bleiben sichtbar.
-TO_REDACT = {"latitude", "longitude"}
+# Der Standort des Nutzers ist PII. async_redact_data arbeitet rekursiv und
+# schwärzt daher auch die (öffentlichen) Stationskoordinaten mit - unschädlich.
+# distance_km muss ebenfalls geschwärzt werden: auf 10 m gerundete Distanzen
+# zu öffentlich bekannten Stationen erlauben sonst Trilateration des Wohnorts.
+TO_REDACT = {"latitude", "longitude", "distance_km"}
 
 
 async def async_get_config_entry_diagnostics(
@@ -24,9 +27,16 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     coordinator = entry.runtime_data
+    data = dict(entry.data)
+    if isinstance(stations := data.get(CONF_STATIONS), dict):
+        # Nach ID sortieren: Die Nächste-zuerst-Reihenfolge des Eintrags
+        # verriete sonst Relativabstände zum Wohnort.
+        data[CONF_STATIONS] = {
+            station_id: stations[station_id] for station_id in sorted(stations)
+        }
     return {
         "entry": {
-            "data": async_redact_data(dict(entry.data), TO_REDACT),
+            "data": async_redact_data(data, TO_REDACT),
             "options": dict(entry.options),
         },
         "update": {

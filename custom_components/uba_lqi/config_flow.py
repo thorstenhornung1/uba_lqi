@@ -71,11 +71,12 @@ class UbaLqiConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the configuration of stations by location."""
 
     VERSION = 2
-    MINOR_VERSION = 0
+    MINOR_VERSION = 1
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
         self._candidates: list[tuple[StationMeta, float]] = []
+        self._total_in_radius = 0
 
     @property
     def _client(self) -> UbaLqiApiClient:
@@ -160,9 +161,11 @@ class UbaLqiConfigFlow(ConfigFlow, domain=DOMAIN):
             key=lambda item: item[1],
         )
         radius = float(self._data[CONF_RADIUS_KM])
-        self._candidates = [
+        within_radius = [
             (station, distance) for station, distance in ranked if distance <= radius
-        ][:MAX_CANDIDATE_STATIONS]
+        ]
+        self._total_in_radius = len(within_radius)
+        self._candidates = within_radius[:MAX_CANDIDATE_STATIONS]
         if not self._candidates:
             return self.async_show_form(
                 step_id="user",
@@ -188,7 +191,7 @@ class UbaLqiConfigFlow(ConfigFlow, domain=DOMAIN):
                 except UbaLqiError:
                     errors["base"] = "cannot_connect"
 
-        by_distance = {station.station_id: distance for station, distance in self._candidates}
+        offered = {station.station_id for station, _ in self._candidates}
         options = [
             selector.SelectOptionDict(
                 value=station.station_id,
@@ -196,11 +199,21 @@ class UbaLqiConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             for station, distance in self._candidates
         ]
-        current = [
-            station_id
-            for station_id in self._existing_selection()
-            if station_id in by_distance
-        ] or [self._candidates[0][0].station_id]
+        if user_input is not None:
+            # Nach einem Validierungsfehler die Auswahl des Nutzers behalten.
+            current = [
+                station_id
+                for station_id in user_input.get(CONF_STATIONS, [])
+                if station_id in offered
+            ]
+        else:
+            current = [
+                station_id
+                for station_id in self._existing_selection()
+                if station_id in offered
+            ]
+        if not current:
+            current = [self._candidates[0][0].station_id]
         return self.async_show_form(
             step_id="select_stations",
             data_schema=vol.Schema(
@@ -218,7 +231,7 @@ class UbaLqiConfigFlow(ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
             description_placeholders={
-                "count": str(len(self._candidates)),
+                "count": str(self._total_in_radius),
                 "radius": str(self._data[CONF_RADIUS_KM]),
             },
         )

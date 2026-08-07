@@ -7,6 +7,7 @@ https://github.com/tonylofgren/aurora-smart-home
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
@@ -154,10 +155,17 @@ class UbaLqiCoordinator(DataUpdateCoordinator[UbaLqiData]):
 
         now = dt_util.utcnow()
         cutoff = now - STALE_AFTER
+        previous = self.data.stations if self.data else {}
         stations: dict[str, StationState] = {}
         for station_id, config in stations_config.items():
+            air = readings.get(station_id)
+            if air is None and station_id in previous:
+                # Transienter Fehler einer einzelnen Station: den letzten
+                # bekannten Rohstand behalten - die Frische-Grenze altert die
+                # Werte von selbst aus, "Letzte Messung" bleibt sichtbar.
+                air = previous[station_id].air
             stations[station_id] = self._build_station_state(
-                station_id, config, readings.get(station_id), cutoff
+                station_id, config, air, cutoff
             )
 
         self._report_data_gaps(stations, now)
@@ -253,28 +261,22 @@ class UbaLqiCoordinator(DataUpdateCoordinator[UbaLqiData]):
             self.update_interval = interval
 
 
-def _build_aggregate(stations: Any) -> AggregateState:
+def _build_aggregate(stations: Iterable[StationState]) -> AggregateState:
     aggregate = AggregateState()
     for state in stations:
         for component_id, value in state.fresh.items():
-            if value.index is None:
-                continue
-            current = aggregate.components.get(component_id)
             # Je Komponente gewinnt die nähere Station; Stationen sind in der
             # Konfiguration bereits nach Entfernung sortiert abgelegt.
-            if current is None:
-                aggregate.components[component_id] = (state.station_id, value)
+            if value.index is None or component_id in aggregate.components:
+                continue
+            aggregate.components[component_id] = (state.station_id, value)
+            if aggregate.lqi is None or value.index > aggregate.lqi:
+                aggregate.lqi = value.index
+                aggregate.driver_station = state.station_id
+                aggregate.driver_component = component_id
         if state.last_measurement is not None and (
             aggregate.last_measurement is None
             or state.last_measurement > aggregate.last_measurement
         ):
             aggregate.last_measurement = state.last_measurement
-
-    for component_id, (station_id, value) in aggregate.components.items():
-        if value.index is None:
-            continue
-        if aggregate.lqi is None or value.index > aggregate.lqi:
-            aggregate.lqi = value.index
-            aggregate.driver_station = station_id
-            aggregate.driver_component = component_id
     return aggregate
