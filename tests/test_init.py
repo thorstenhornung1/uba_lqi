@@ -13,12 +13,13 @@ from homeassistant.helpers import (
     entity_registry as er,
     issue_registry as ir,
 )
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.uba_lqi.api import UbaLqiConnectionError
 from custom_components.uba_lqi.const import DOMAIN
 
-from .conftest import HOME_LAT, HOME_LON
+from .conftest import HOME_LAT, HOME_LON, entry_data_v2
 
 
 async def test_setup_and_unload(hass: HomeAssistant, fake_api, config_entry) -> None:
@@ -183,6 +184,74 @@ async def test_migrated_entry_retries_when_api_down(
     assert entry.state is ConfigEntryState.SETUP_RETRY
     # Die Migration selbst ist gelaufen; nur die Discovery wartet auf die API.
     assert entry.version == 2
+
+
+async def test_setup_backfills_missing_distances(
+    hass: HomeAssistant, fake_api
+) -> None:
+    """Einträge ohne Entfernungen bekommen sie beim Setup einmalig nachgetragen."""
+    data = entry_data_v2()
+    stations = data["stations"]
+    data["stations"] = {
+        "1114": {
+            **stations["1114"],
+            "latitude": None,
+            "longitude": None,
+            "distance_km": None,
+        },
+        "1117": {
+            **stations["1117"],
+            "latitude": None,
+            "longitude": None,
+            "distance_km": None,
+        },
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, data=data, options={}, version=2, entry_id="backfill_entry"
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    stations = entry.data["stations"]
+    assert list(stations) == ["1117", "1114"]  # nach Entfernung sortiert
+    assert stations["1117"]["distance_km"] == pytest.approx(2.68, abs=0.05)
+    assert stations["1114"]["distance_km"] == pytest.approx(19.55, abs=0.05)
+    assert stations["1114"]["latitude"] == 50.8942
+
+
+async def test_setup_survives_station_list_failure(
+    hass: HomeAssistant, fake_api
+) -> None:
+    """Der Entfernungs-Nachtrag ist weich: API-Fehler blockiert das Setup nicht."""
+    data = entry_data_v2()
+    stations = data["stations"]
+    data["stations"] = {
+        "1114": {
+            **stations["1114"],
+            "latitude": None,
+            "longitude": None,
+            "distance_km": None,
+        },
+        "1117": {
+            **stations["1117"],
+            "latitude": None,
+            "longitude": None,
+            "distance_km": None,
+        },
+    }
+    fake_api.stations = UbaLqiConnectionError("down")
+    entry = MockConfigEntry(
+        domain=DOMAIN, data=data, options={}, version=2, entry_id="soft_fail_entry"
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.data["stations"]["1117"]["distance_km"] is None
 
 
 async def test_stale_registry_cleanup(

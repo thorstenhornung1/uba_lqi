@@ -326,7 +326,7 @@ class UbaLqiComponentSensor(UbaLqiStationEntity, SensorEntity):
 
 
 class UbaLqiCombinedSensor(UbaLqiCombinedEntity, SensorEntity):
-    """Worst single index across all configured stations."""
+    """Worst single index across the per-component nearest sources."""
 
     def __init__(
         self, coordinator: UbaLqiCoordinator, description: SensorEntityDescription

@@ -57,7 +57,7 @@ class StationState:
 
 @dataclass(slots=True)
 class AggregateState:
-    """Worst-case air quality across all configured stations."""
+    """Combined air quality: per component the nearest fresh source."""
 
     lqi: int | None = None
     driver_station: str | None = None
@@ -261,12 +261,19 @@ class UbaLqiCoordinator(DataUpdateCoordinator[UbaLqiData]):
             self.update_interval = interval
 
 
+def _distance_sort_key(state: StationState) -> tuple[bool, float]:
+    distance = state.config.get("distance_km")
+    return (distance is None, float(distance) if distance is not None else 0.0)
+
+
 def _build_aggregate(stations: Iterable[StationState]) -> AggregateState:
     aggregate = AggregateState()
-    for state in stations:
+    # Je Komponente gewinnt die nächstgelegene Station: explizit nach
+    # Entfernung sortieren statt sich auf die Speicher-Reihenfolge des
+    # Eintrags zu verlassen - migrierte Einträge können unsortiert sein.
+    # Ohne bekannte Entfernung bleibt die Speicher-Reihenfolge (stabiler Sort).
+    for state in sorted(stations, key=_distance_sort_key):
         for component_id, value in state.fresh.items():
-            # Je Komponente gewinnt die nähere Station; Stationen sind in der
-            # Konfiguration bereits nach Entfernung sortiert abgelegt.
             if value.index is None or component_id in aggregate.components:
                 continue
             aggregate.components[component_id] = (state.station_id, value)

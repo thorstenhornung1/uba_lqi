@@ -20,7 +20,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import UbaLqiApiClient, UbaLqiError
+from .api import StationMeta, UbaLqiApiClient, UbaLqiError
 from .const import (
     CONF_LOCATION_SOURCE,
     CONF_RADIUS_KM,
@@ -48,7 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: UbaLqiConfigEntry) -> bo
     """Set up UBA LQI from a config entry."""
     client = UbaLqiApiClient(async_get_clientsession(hass))
 
-    await _async_ensure_station_components(hass, entry, client)
+    await _async_ensure_station_metadata(hass, entry, client)
 
     coordinator = UbaLqiCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
@@ -119,8 +119,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "Cannot migrate entry %s: no stations found in old data", entry.title
             )
             return False
-        # Nach Entfernung sortieren: beim kombinierten Index gewinnt je
-        # Komponente die zuerst gelistete (nächstgelegene) Station.
+        # Nach Entfernung sortieren (Anzeige-Reihenfolge; der kombinierte
+        # Sensor sortiert zur Laufzeit selbst nach Entfernung).
         stations = dict(
             sorted(
                 stations.items(),
@@ -187,14 +187,20 @@ async def _async_migrate_v1_unique_ids(
     await er.async_migrate_entries(hass, entry.entry_id, _migrate)
 
 
-async def _async_ensure_station_components(
+async def _async_ensure_station_metadata(
     hass: HomeAssistant, entry: UbaLqiConfigEntry, client: UbaLqiApiClient
 ) -> None:
-    """Ermittelt fehlende Komponentenlisten (z. B. nach Migration) einmalig.
+    """Ergänzt fehlende Stationsmetadaten (z. B. nach Migration) einmalig.
 
-    Entitäten entstehen aus diesen gespeicherten Metadaten - nicht aus der
-    ersten API-Antwort, damit keine Entität fehlt, wenn eine Komponente
-    gerade "hinkt".
+    Zwei Lücken können v1-Einträge hinterlassen: fehlende Entfernungen (der
+    kombinierte Index braucht sie, um die nächstgelegene Station je Komponente
+    zu bestimmen) und fehlende Komponentenlisten. Entitäten entstehen aus
+    diesen gespeicherten Metadaten - nicht aus der ersten API-Antwort, damit
+    keine Entität fehlt, wenn eine Komponente gerade "hinkt".
+
+    Der Entfernungs-Nachtrag ist weich: Schlägt die Stationsliste fehl, läuft
+    das Setup ohne Entfernungen weiter (die Speicher-Reihenfolge bleibt dann
+    das Fallback). Die Komponenten-Ermittlung bleibt hart (ConfigEntryNotReady).
 
     Bewusst: Eine Station, die im Discovery-Fenster nichts lieferte
     (``components: []``), wird bei jedem weiteren Setup erneut befragt, damit
@@ -202,13 +208,72 @@ async def _async_ensure_station_components(
     API-Aufruf je Start und stummer Station.
     """
     stations: dict[str, dict[str, Any]] = entry.data[CONF_STATIONS]
-    if all(config.get("components") for config in stations.values()):
+    home_lat = entry.data.get("latitude")
+    home_lon = entry.data.get("longitude")
+    needs_geo = (
+        home_lat is not None
+        and home_lon is not None
+        and any(config.get("distance_km") is None for config in stations.values())
+    )
+    needs_components = not all(
+        config.get("components") for config in stations.values()
+    )
+    if not needs_geo and not needs_components:
         return
 
-    new_stations: dict[str, dict[str, Any]] = {}
-    for station_id, config in stations.items():
+    new_stations = {
+        station_id: dict(config) for station_id, config in stations.items()
+    }
+
+    if needs_geo and home_lat is not None and home_lon is not None:
+        meta: dict[str, StationMeta] | None = None
+        if any(
+            config.get("distance_km") is None
+            and (config.get("latitude") is None or config.get("longitude") is None)
+            for config in new_stations.values()
+        ):
+            try:
+                meta = await client.async_get_stations()
+            except UbaLqiError as err:
+                _LOGGER.warning(
+                    "Could not fetch the station list to determine distances, "
+                    "keeping the stored station order: %s",
+                    err,
+                )
+        for station_id, config in new_stations.items():
+            if config.get("distance_km") is not None:
+                continue
+            latitude = config.get("latitude")
+            longitude = config.get("longitude")
+            if (latitude is None or longitude is None) and meta is not None:
+                station = meta.get(station_id)
+                if station is not None:
+                    latitude = station.latitude
+                    longitude = station.longitude
+                    config["latitude"] = latitude
+                    config["longitude"] = longitude
+            if latitude is not None and longitude is not None:
+                config["distance_km"] = round(
+                    haversine_km(
+                        float(home_lat),
+                        float(home_lon),
+                        float(latitude),
+                        float(longitude),
+                    ),
+                    2,
+                )
+        new_stations = dict(
+            sorted(
+                new_stations.items(),
+                key=lambda item: (
+                    item[1]["distance_km"] is None,
+                    item[1]["distance_km"] or 0.0,
+                ),
+            )
+        )
+
+    for station_id, config in new_stations.items():
         if config.get("components"):
-            new_stations[station_id] = config
             continue
         try:
             air = await client.async_get_air_quality(
@@ -226,11 +291,12 @@ async def _async_ensure_station_components(
                 station_id,
                 DISCOVERY_WINDOW_HOURS,
             )
-        new_stations[station_id] = {**config, "components": components}
+        config["components"] = components
 
-    hass.config_entries.async_update_entry(
-        entry, data={**entry.data, CONF_STATIONS: new_stations}
-    )
+    if list(new_stations.items()) != list(stations.items()):
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_STATIONS: new_stations}
+        )
 
 
 def _async_remove_stale_registry_entries(

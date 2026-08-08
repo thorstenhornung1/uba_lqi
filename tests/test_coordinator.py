@@ -10,11 +10,12 @@ from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.uba_lqi.api import UbaLqiConnectionError
 from custom_components.uba_lqi.const import DOMAIN
 
-from .conftest import FRESH_END, air, bonn_air, component, koeln_air
+from .conftest import FRESH_END, air, bonn_air, component, entry_data_v2, koeln_air
 
 
 async def _setup(hass, config_entry):
@@ -120,3 +121,49 @@ async def test_aggregate_prefers_nearest_station_per_component(
     assert station_id == "1117"
     assert value.index == 1
     assert aggregate.lqi == 1
+
+
+async def test_aggregate_sorts_stations_by_distance(
+    hass: HomeAssistant, fake_api, frozen_now
+) -> None:
+    """Fernere Station zuerst gespeichert: die nähere gewinnt trotzdem."""
+    data = entry_data_v2()
+    stations = data["stations"]
+    data["stations"] = {"1114": stations["1114"], "1117": stations["1117"]}
+    entry = MockConfigEntry(
+        domain=DOMAIN, data=data, options={}, version=2, entry_id="swapped_entry"
+    )
+    entry.add_to_hass(hass)
+    fake_api.air["1117"] = air("1117", [component(1, 45.0, 2)])
+    coordinator = await _setup(hass, entry)
+
+    aggregate = coordinator.data.aggregate
+    # PM10 kommt aus Bonn (2,68 km, Index 2), nicht aus Köln (19,55 km).
+    station_id, value = aggregate.components[1]
+    assert station_id == "1117"
+    assert value.index == 2
+    assert aggregate.lqi == 2
+    assert aggregate.driver_station == "1117"
+    assert aggregate.driver_component == 1
+
+
+async def test_aggregate_without_distances_keeps_stored_order(
+    hass: HomeAssistant, fake_api, frozen_now
+) -> None:
+    """Ohne bekannte Entfernungen entscheidet die Speicher-Reihenfolge."""
+    data = entry_data_v2()
+    data["latitude"] = None
+    data["longitude"] = None
+    stations = data["stations"]
+    data["stations"] = {
+        "1114": {**stations["1114"], "distance_km": None},
+        "1117": {**stations["1117"], "distance_km": None},
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, data=data, options={}, version=2, entry_id="no_distance_entry"
+    )
+    entry.add_to_hass(hass)
+    coordinator = await _setup(hass, entry)
+
+    # Köln ist zuerst gespeichert und liefert PM10 daher als Quelle.
+    assert coordinator.data.aggregate.components[1][0] == "1114"

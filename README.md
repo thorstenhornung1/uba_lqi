@@ -104,7 +104,7 @@ kombiniert"**:
 | Letzte Messung | Station | aktiv (Diagnose) | Ende des jüngsten Messintervalls — zeigt Datenstau sofort |
 | Entfernung | Station | deaktiviert (Diagnose) | Distanz zum konfigurierten Standort |
 | Luftqualitätsindex (numerisch) | Station | deaktiviert (Diagnose) | 0–4 für Automationen |
-| Luftqualitätsindex | kombiniert | aktiv | Schlechtester Einzelindex über alle Stationen; Attribute zeigen je Komponente Wert, Quelle und Treiber |
+| Luftqualitätsindex | kombiniert | aktiv | Schlechtester Einzelindex, je Komponente von der nächstgelegenen Station, die sie liefert; Attribute zeigen je Komponente Wert, Quelle und Treiber |
 | Luftqualitätsindex (numerisch) | kombiniert | deaktiviert (Diagnose) | 0–4 |
 
 ¹ Exotische Komponenten (Blei, Benzo(a)pyren, …) sind standardmäßig deaktiviert.
