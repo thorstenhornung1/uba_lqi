@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.uba_lqi.api import UbaLqiConnectionError
-from custom_components.uba_lqi.const import DOMAIN
+from custom_components.uba_lqi.const import DISCOVERY_WINDOW_HOURS, DOMAIN
 
 from .conftest import HOME_LAT, HOME_LON
 
@@ -56,6 +56,12 @@ async def test_full_flow_home_location(hass: HomeAssistant, fake_api) -> None:
     assert stations["1117"]["components"] == [1, 5, 9]
     assert stations["1114"]["components"] == [1, 3, 4, 5, 9]
     assert stations["1117"]["distance_km"] < stations["1114"]["distance_km"]
+    # Großzügiges Fenster, damit die Einrichtung auch bei einem Datenausfall gelingt.
+    assert fake_api.stations_hours_back == DISCOVERY_WINDOW_HOURS
+    assert {
+        ("1117", DISCOVERY_WINDOW_HOURS),
+        ("1114", DISCOVERY_WINDOW_HOURS),
+    } <= set(fake_api.air_calls)
 
 
 async def test_manual_location(hass: HomeAssistant, fake_api) -> None:

@@ -29,6 +29,7 @@ from .const import (
     CONF_STATIONS,
     CONF_UPDATE_INTERVAL,
     DEFAULT_UPDATE_INTERVAL_MINUTES,
+    DISCOVERY_WINDOW_HOURS,
     DOMAIN,
     FETCH_WINDOW_HOURS,
     ISSUE_STATION_SILENT,
@@ -94,6 +95,9 @@ class UbaLqiCoordinator(DataUpdateCoordinator[UbaLqiData]):
         )
         self._consecutive_failures = 0
         self._stations_without_data: set[str] = set()
+        # Stationen, deren letzte Messung bereits über das lange Fenster
+        # gesucht wurde - höchstens ein Zusatzabruf je Station pro Laufzeit.
+        self._history_looked_up: set[str] = set()
         super().__init__(
             hass,
             _LOGGER,
@@ -106,11 +110,10 @@ class UbaLqiCoordinator(DataUpdateCoordinator[UbaLqiData]):
         stations_config: dict[str, dict[str, Any]] = self.config_entry.data[
             CONF_STATIONS
         ]
+        previous = self.data.stations if self.data else {}
         results = await asyncio.gather(
             *(
-                self.client.async_get_air_quality(
-                    station_id, hours_back=FETCH_WINDOW_HOURS
-                )
+                self._async_fetch_station(station_id, previous.get(station_id))
                 for station_id in stations_config
             ),
             return_exceptions=True,
@@ -155,15 +158,16 @@ class UbaLqiCoordinator(DataUpdateCoordinator[UbaLqiData]):
 
         now = dt_util.utcnow()
         cutoff = now - STALE_AFTER
-        previous = self.data.stations if self.data else {}
         stations: dict[str, StationState] = {}
         for station_id, config in stations_config.items():
             air = readings.get(station_id)
-            if air is None and station_id in previous:
-                # Transienter Fehler einer einzelnen Station: den letzten
-                # bekannten Rohstand behalten - die Frische-Grenze altert die
-                # Werte von selbst aus, "Letzte Messung" bleibt sichtbar.
-                air = previous[station_id].air
+            previous_air = previous[station_id].air if station_id in previous else None
+            if previous_air is not None and (air is None or air.newest_end is None):
+                # Fehler einer Station oder leere Antwort (UBA ohne Daten im
+                # Abruffenster): den letzten bekannten Rohstand behalten - die
+                # Frische-Grenze altert die Werte von selbst aus, "Letzte
+                # Messung" und das Repair Issue behalten den echten Zeitpunkt.
+                air = previous_air
             stations[station_id] = self._build_station_state(
                 station_id, config, air, cutoff
             )
@@ -172,6 +176,37 @@ class UbaLqiCoordinator(DataUpdateCoordinator[UbaLqiData]):
         return UbaLqiData(
             stations=stations, aggregate=_build_aggregate(stations.values())
         )
+
+    async def _async_fetch_station(
+        self, station_id: str, previous: StationState | None
+    ) -> StationAirQuality:
+        air = await self.client.async_get_air_quality(
+            station_id, hours_back=FETCH_WINDOW_HOURS
+        )
+        if (
+            air.newest_end is not None
+            or (previous is not None and previous.last_measurement is not None)
+            or station_id in self._history_looked_up
+        ):
+            return air
+        # Leeres Abruffenster ohne bekannten Stand (typisch: Neustart während
+        # eines Datenausfalls): einmalig weiter zurückblicken, damit "Letzte
+        # Messung" und das Repair Issue den echten Zeitpunkt zeigen. Die
+        # Werte selbst sind veraltet und werden über die Frische-Grenze
+        # ausgefiltert.
+        try:
+            history = await self.client.async_get_air_quality(
+                station_id, hours_back=DISCOVERY_WINDOW_HOURS
+            )
+        except UbaLqiError as err:
+            _LOGGER.debug(
+                "Looking up the last measurement of station %s failed: %s",
+                station_id,
+                err,
+            )
+            return air
+        self._history_looked_up.add(station_id)
+        return history
 
     def _build_station_state(
         self,

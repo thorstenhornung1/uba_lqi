@@ -13,7 +13,11 @@ from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.uba_lqi.api import UbaLqiConnectionError
-from custom_components.uba_lqi.const import DOMAIN
+from custom_components.uba_lqi.const import (
+    DISCOVERY_WINDOW_HOURS,
+    DOMAIN,
+    FETCH_WINDOW_HOURS,
+)
 
 from .conftest import FRESH_END, air, bonn_air, component, entry_data_v2, koeln_air
 
@@ -104,6 +108,74 @@ async def test_repair_issue_for_silent_station(
     fake_api.air["1117"] = bonn_air()
     await coordinator.async_refresh()
     assert registry.async_get_issue(DOMAIN, "station_silent_1117") is None
+
+
+async def test_empty_response_keeps_last_measurement(
+    hass: HomeAssistant, fake_api, config_entry, frozen_now, freezer
+) -> None:
+    """Datenausfall beim UBA: Werte altern aus, der Zeitpunkt der letzten Messung bleibt."""
+    coordinator = await _setup(hass, config_entry)
+
+    fake_api.air = {"1117": air("1117", []), "1114": air("1114", [])}
+    freezer.move_to(frozen_now + timedelta(hours=25))
+    fake_api.air_calls.clear()
+    await coordinator.async_refresh()
+
+    assert coordinator.last_update_success is True
+    state = coordinator.data.stations["1117"]
+    assert state.lqi is None
+    assert state.last_measurement == FRESH_END
+    assert coordinator.data.aggregate.lqi is None
+    assert coordinator.data.aggregate.last_measurement == FRESH_END
+    # Bekannter Stand vorhanden: kein Zusatzabruf mit langem Fenster.
+    assert {hours for _, hours in fake_api.air_calls} == {FETCH_WINDOW_HOURS}
+
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, "station_silent_1117")
+    assert issue is not None
+    assert issue.translation_placeholders["last"] == FRESH_END.isoformat()
+
+
+async def test_restart_during_outage_looks_up_last_measurement(
+    hass: HomeAssistant, fake_api, config_entry, frozen_now
+) -> None:
+    """Neustart während eines Ausfalls: letzte Messung einmalig weiter zurück suchen."""
+    old_end = frozen_now - timedelta(days=2)
+    fake_api.air["1117"] = air("1117", [])
+    fake_api.history["1117"] = air("1117", [component(1, 20.0, 1, end=old_end)])
+    coordinator = await _setup(hass, config_entry)
+
+    state = coordinator.data.stations["1117"]
+    assert state.last_measurement == old_end
+    assert state.lqi is None
+    assert coordinator.data.stations["1114"].lqi == 2
+    assert fake_api.air_calls.count(("1117", DISCOVERY_WINDOW_HOURS)) == 1
+    assert ("1114", DISCOVERY_WINDOW_HOURS) not in fake_api.air_calls
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, "station_silent_1117")
+    assert issue is not None
+    assert issue.translation_placeholders["last"] == old_end.isoformat()
+
+    await coordinator.async_refresh()
+    assert coordinator.data.stations["1117"].last_measurement == old_end
+    assert fake_api.air_calls.count(("1117", DISCOVERY_WINDOW_HOURS)) == 1
+
+
+async def test_failed_lookup_is_retried(
+    hass: HomeAssistant, fake_api, config_entry, frozen_now
+) -> None:
+    """Scheitert die Suche nach der letzten Messung, zählt die Station trotzdem als erreichbar."""
+    fake_api.air = {"1117": air("1117", []), "1114": air("1114", [])}
+    fake_api.history["1117"] = UbaLqiConnectionError("down")
+    coordinator = await _setup(hass, config_entry)
+
+    assert coordinator.last_update_success is True
+    assert coordinator.update_interval == timedelta(minutes=60)
+    assert coordinator.data.stations["1117"].last_measurement is None
+
+    old_end = frozen_now - timedelta(days=2)
+    fake_api.history["1117"] = air("1117", [component(1, 20.0, 1, end=old_end)])
+    await coordinator.async_refresh()
+    assert coordinator.data.stations["1117"].last_measurement == old_end
+    assert fake_api.air_calls.count(("1117", DISCOVERY_WINDOW_HOURS)) == 2
 
 
 async def test_aggregate_prefers_nearest_station_per_component(

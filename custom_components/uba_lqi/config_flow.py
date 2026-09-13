@@ -143,7 +143,9 @@ class UbaLqiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _async_load_candidates(self) -> ConfigFlowResult:
         """Fetch the active station list and rank it by distance."""
         try:
-            stations = await self._client.async_get_stations()
+            stations = await self._client.async_get_stations(
+                hours_back=DISCOVERY_WINDOW_HOURS
+            )
         except UbaLqiError:
             return self.async_show_form(
                 step_id="user",
@@ -239,7 +241,7 @@ class UbaLqiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _async_finish(self, selected: list[str]) -> ConfigFlowResult:
         """Determine measured components per station and create the entry.
 
-        Die Komponentenlisten werden hier einmalig über ein 48-h-Fenster
+        Die Komponentenlisten werden hier einmalig über ein 14-Tage-Fenster
         ermittelt und im Eintrag gespeichert; Entitäten entstehen später aus
         diesen Metadaten statt aus der ersten API-Antwort.
         """
