@@ -51,6 +51,9 @@ zählt dabei die nächstgelegene Station, die sie aktuell liefert.
 
 ## Installation
 
+Voraussetzung: **Home Assistant 2026.7 oder neuer.** Für ältere Versionen
+bleibt Version 2.0.2 der Integration installierbar.
+
 ### HACS (empfohlen)
 
 1. **HACS** öffnen → Menü (⋮) → **Benutzerdefinierte Repositories**

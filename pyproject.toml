@@ -6,7 +6,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 88
 
 [tool.ruff.lint]
@@ -29,7 +29,7 @@ combine-as-imports = true
 known-first-party = ["custom_components.uba_lqi"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 strict = true
 warn_unreachable = true
 disallow_any_generics = false

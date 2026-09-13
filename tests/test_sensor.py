@@ -6,10 +6,7 @@ https://github.com/tonylofgren/aurora-smart-home
 
 from __future__ import annotations
 
-from homeassistant.const import (
-    CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
-    CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER,
-)
+from homeassistant.const import UnitOfDensity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -116,7 +113,7 @@ async def test_component_units_and_device_classes(
     pm10 = _state(hass, "1117_component_1")
     assert (
         pm10.attributes["unit_of_measurement"]
-        == CONCENTRATION_MICROGRAMS_PER_CUBIC_METER
+        == UnitOfDensity.MICROGRAMS_PER_CUBIC_METER
     )
     assert pm10.attributes["device_class"] == "pm10"
     o3 = _state(hass, "1114_component_3")
@@ -184,7 +181,7 @@ async def test_co_sensor_uses_native_unit(
     assert co.attributes["device_class"] == "carbon_monoxide"
     assert (
         co.attributes["unit_of_measurement"]
-        == CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER
+        == UnitOfDensity.MILLIGRAMS_PER_CUBIC_METER
     )
     # CO ist keine Indexkomponente - kein Level, aber verfügbar.
     assert co.attributes["index"] is None

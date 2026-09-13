@@ -17,12 +17,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import (
-    CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
-    CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER,
-    EntityCategory,
-    UnitOfLength,
-)
+from homeassistant.const import EntityCategory, UnitOfDensity, UnitOfLength
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
@@ -102,34 +97,34 @@ class UbaLqiComponentDescription:
 COMPONENT_DESCRIPTIONS: dict[int, UbaLqiComponentDescription] = {
     1: UbaLqiComponentDescription(
         translation_key="pm10",
-        unit=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        unit=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
         device_class=SensorDeviceClass.PM10,
     ),
     2: UbaLqiComponentDescription(
         translation_key="co",
         # Die API liefert CO in mg/m³; HA erlaubt diese Einheit für die
-        # CO-Geräteklasse seit langem nativ - keine Umrechnung nötig.
-        unit=CONCENTRATION_MILLIGRAMS_PER_CUBIC_METER,
+        # CO-Geräteklasse nativ - keine Umrechnung nötig.
+        unit=UnitOfDensity.MILLIGRAMS_PER_CUBIC_METER,
         device_class=SensorDeviceClass.CO,
     ),
     3: UbaLqiComponentDescription(
         translation_key="o3",
-        unit=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        unit=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
         device_class=SensorDeviceClass.OZONE,
     ),
     4: UbaLqiComponentDescription(
         translation_key="so2",
-        unit=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        unit=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
         device_class=SensorDeviceClass.SULPHUR_DIOXIDE,
     ),
     5: UbaLqiComponentDescription(
         translation_key="no2",
-        unit=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        unit=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
         device_class=SensorDeviceClass.NITROGEN_DIOXIDE,
     ),
     6: UbaLqiComponentDescription(
         translation_key="lead",
-        unit=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        unit=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
         enabled_default=False,
     ),
     7: UbaLqiComponentDescription(
@@ -139,12 +134,12 @@ COMPONENT_DESCRIPTIONS: dict[int, UbaLqiComponentDescription] = {
     ),
     8: UbaLqiComponentDescription(
         translation_key="benzene",
-        unit=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        unit=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
         enabled_default=False,
     ),
     9: UbaLqiComponentDescription(
         translation_key="pm25",
-        unit=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
+        unit=UnitOfDensity.MICROGRAMS_PER_CUBIC_METER,
         device_class=SensorDeviceClass.PM25,
     ),
     10: UbaLqiComponentDescription(

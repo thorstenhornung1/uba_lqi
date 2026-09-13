@@ -198,6 +198,9 @@ async def test_reconfigure(hass: HomeAssistant, fake_api, config_entry) -> None:
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
     assert list(config_entry.data["stations"]) == ["1117"]
+    # Der Reload läuft im Hintergrund; abwarten, sonst bleibt der
+    # Coordinator-Timer über das Testende hinaus stehen.
+    await hass.async_block_till_done()
 
 
 async def test_options_flow(hass: HomeAssistant, fake_api, config_entry) -> None:
