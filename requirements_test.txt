@@ -1,3 +1,5 @@
-pytest-homeassistant-custom-component
+# Untergrenze = HA 2026.7.0 (Mindestversion laut hacs.json). Bricht laut ab,
+# statt mit zu altem Python still gegen ein veraltetes HA zu testen.
+pytest-homeassistant-custom-component>=0.13.344
 pytest-cov
 ruff

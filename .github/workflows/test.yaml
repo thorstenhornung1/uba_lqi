@@ -9,16 +9,31 @@ on:
 
 jobs:
   pytest:
+    name: pytest (${{ matrix.label }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Mindestversion laut hacs.json und aktueller Stand. HA verlangt seit
+        # 2026.3 Python 3.14; mit älterem Python würde pip stillschweigend auf
+        # ein veraltetes Test-Harness ausweichen.
+        include:
+          - label: HA 2026.7.0
+            harness: pytest-homeassistant-custom-component==0.13.344
+          - label: HA latest
+            harness: pytest-homeassistant-custom-component
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - name: Install dependencies
+        env:
+          HARNESS: ${{ matrix.harness }}
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements_test.txt
+          pip install -r requirements_test.txt "$HARNESS"
+          python -c "import homeassistant.const as c; print('Home Assistant', c.__version__)"
       - name: Ruff
         run: ruff check custom_components tests
       - name: Run tests
