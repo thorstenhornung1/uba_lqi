@@ -107,14 +107,16 @@ class UbaLqiApiClient:
             raise UbaLqiResponseError(f"Unexpected payload type from {url}")
         return data
 
-    async def async_get_stations(self) -> dict[str, StationMeta]:
-        """Return all stations that delivered air quality data recently.
+    async def async_get_stations(self, *, hours_back: int) -> dict[str, StationMeta]:
+        """Return all stations that delivered air quality data within the window.
 
         Mit Datumsfenster liefert die v4-API nur die aktiven Stationen
-        (~420 statt ~2400). Wird ausschließlich im Config Flow aufgerufen.
+        (~420 statt ~2400). Enthält das Fenster keine Messdaten (Datenausfall
+        beim UBA), fehlt ``stations`` in der Antwort komplett. Wird
+        ausschließlich im Config Flow aufgerufen.
         """
         now = datetime.now(tz=API_TZ)
-        start = now - timedelta(hours=24)
+        start = now - timedelta(hours=hours_back)
         payload = await self._async_get(
             "meta/json",
             {

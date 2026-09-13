@@ -18,7 +18,7 @@ from custom_components.uba_lqi.api import (
     StationMeta,
     UbaLqiApiClient,
 )
-from custom_components.uba_lqi.const import DOMAIN
+from custom_components.uba_lqi.const import DOMAIN, FETCH_WINDOW_HOURS
 
 # Eingefrorene Testzeit: 07:30 MEZ = 06:30 UTC.
 NOW_UTC = datetime(2026, 8, 7, 6, 30, tzinfo=UTC)
@@ -129,14 +129,22 @@ class FakeApi:
             "1117": bonn_air(),
             "1114": koeln_air(),
         }
+        # Antworten für das lange Rückblick-Fenster; ohne Eintrag gilt ``air``.
+        self.history: dict[str, StationAirQuality | Exception] = {}
+        self.stations_hours_back: int | None = None
+        self.air_calls: list[tuple[str, int]] = []
 
-    async def get_stations(self) -> dict[str, StationMeta]:
+    async def get_stations(self, *, hours_back: int) -> dict[str, StationMeta]:
+        self.stations_hours_back = hours_back
         if isinstance(self.stations, Exception):
             raise self.stations
         return self.stations
 
     async def get_air(self, station_id: str, *, hours_back: int) -> StationAirQuality:
+        self.air_calls.append((str(station_id), hours_back))
         result = self.air.get(str(station_id))
+        if hours_back > FETCH_WINDOW_HOURS and str(station_id) in self.history:
+            result = self.history[str(station_id)]
         if isinstance(result, Exception):
             raise result
         if result is None:

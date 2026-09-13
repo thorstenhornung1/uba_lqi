@@ -233,7 +233,9 @@ async def _async_ensure_station_metadata(
             for config in new_stations.values()
         ):
             try:
-                meta = await client.async_get_stations()
+                meta = await client.async_get_stations(
+                    hours_back=DISCOVERY_WINDOW_HOURS
+                )
             except UbaLqiError as err:
                 _LOGGER.warning(
                     "Could not fetch the station list to determine distances, "

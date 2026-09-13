@@ -110,7 +110,7 @@ kombiniert"**:
 ¹ Exotische Komponenten (Blei, Benzo(a)pyren, …) sind standardmäßig deaktiviert.
 
 Welche Schadstoff-Sensoren angelegt werden, bestimmen die bei der Einrichtung
-über ein 48-h-Fenster ermittelten und gespeicherten Stationsmetadaten — nicht
+über ein 14-Tage-Fenster ermittelten und gespeicherten Stationsmetadaten — nicht
 die erste API-Antwort. Nach einem Neustart fehlen daher keine Entitäten, auch
 wenn eine Komponente gerade aussetzt.
 
@@ -157,6 +157,10 @@ Numerischer Vergleich (Diagnose-Sensor aktivieren oder Attribut nutzen):
   Stunden zurück, liefert die Station nicht — nach > 24 h erscheint ein
   Repair Issue mit Hinweis. Bleibt die Station stumm, per **Neu
   konfigurieren** ersetzen.
+- **Alle Stationen gleichzeitig `unavailable`:** Meist ein Datenausfall beim
+  Umweltbundesamt selbst (die API antwortet dann, liefert aber keine
+  Messwerte). „Letzte Messung" zeigt, seit wann; die Sensoren kommen
+  automatisch zurück, sobald wieder Daten fließen.
 - **Log:** Die Integration warnt einmalig, wenn eine Station keine frischen
   Daten mehr liefert, und meldet die Erholung.
 - **Diagnose:** Eintrag → ⋮ → **Diagnose herunterladen** (Heimkoordinaten

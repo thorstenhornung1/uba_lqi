@@ -149,7 +149,11 @@ async def test_station_meta_parsing(hass, aioclient_mock, frozen_now) -> None:
         },
     )
     client = UbaLqiApiClient(async_get_clientsession(hass))
-    stations = await client.async_get_stations()
+    stations = await client.async_get_stations(hours_back=14 * 24)
+    # Fenster in MEZ: 07.08. 07:30 minus 14 Tage.
+    request_url = aioclient_mock.mock_calls[-1][1]
+    assert request_url.query["date_from"] == "2026-07-24"
+    assert request_url.query["date_to"] == "2026-08-07"
     station = stations["1117"]
     assert station.code == "DENW062"
     assert station.name == "Bonn-Auerberg"
@@ -203,7 +207,7 @@ async def test_station_list_unparseable(hass, aioclient_mock, frozen_now) -> Non
     )
     client = UbaLqiApiClient(async_get_clientsession(hass))
     with pytest.raises(UbaLqiResponseError):
-        await client.async_get_stations()
+        await client.async_get_stations(hours_back=24)
 
 
 async def test_http_error(hass, aioclient_mock, frozen_now) -> None:
@@ -224,18 +228,18 @@ async def test_invalid_json(hass, aioclient_mock, frozen_now) -> None:
     aioclient_mock.get(META_URL, text="kein json")
     client = UbaLqiApiClient(async_get_clientsession(hass))
     with pytest.raises(UbaLqiResponseError):
-        await client.async_get_stations()
+        await client.async_get_stations(hours_back=24)
 
 
 async def test_missing_station_list(hass, aioclient_mock, frozen_now) -> None:
     aioclient_mock.get(META_URL, json={"stations": None})
     client = UbaLqiApiClient(async_get_clientsession(hass))
     with pytest.raises(UbaLqiResponseError):
-        await client.async_get_stations()
+        await client.async_get_stations(hours_back=24)
 
 
 async def test_unexpected_payload(hass, aioclient_mock, frozen_now) -> None:
     aioclient_mock.get(META_URL, json=[])
     client = UbaLqiApiClient(async_get_clientsession(hass))
     with pytest.raises(UbaLqiResponseError):
-        await client.async_get_stations()
+        await client.async_get_stations(hours_back=24)

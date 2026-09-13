@@ -37,8 +37,11 @@ MAX_CANDIDATE_STATIONS: Final = 25
 # Abfragefenster je Aktualisierung: pro Komponente wird der jüngste Wert im
 # Fenster verwendet, damit einzelne "hinkende" Komponenten nicht verloren gehen.
 FETCH_WINDOW_HOURS: Final = 24
-# Fenster im Config Flow, um die von einer Station gemessenen Komponenten zu ermitteln.
-DISCOVERY_WINDOW_HOURS: Final = 48
+# Rückblick-Fenster für Stationsliste und Komponenten im Config Flow sowie für
+# die einmalige Suche nach der letzten Messung nach dem Start. Großzügig
+# gewählt, damit beides auch während eines mehrtägigen Datenausfalls beim UBA
+# funktioniert; die Stationsliste wächst dadurch nicht (weiterhin ~420).
+DISCOVERY_WINDOW_HOURS: Final = 14 * 24
 # Werte, deren Messintervall länger zurückliegt, gelten als veraltet.
 STALE_AFTER: Final = timedelta(hours=3)
 # Station so lange ohne jegliche Daten -> Repair Issue.
